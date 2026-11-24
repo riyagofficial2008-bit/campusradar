@@ -328,9 +328,13 @@ export default function App() {
         setSharedStudentFacilities(initial.facilities);
         setPinOverrides(initial.pinOverrides);
         setReports(initial.reports);
-        setSyncStatus('connected');
-        setSyncError(null);
-        setLastSyncedAt(new Date().toISOString());
+        if (initial.permissionDenied) {
+          setSuperAppRulesNeeded(true);
+        } else {
+          setSyncStatus('connected');
+          setSyncError(null);
+          setLastSyncedAt(new Date().toISOString());
+        }
       })
       .catch((err) => {
         if (!mounted) return;
@@ -364,6 +368,11 @@ export default function App() {
         if (mounted) {
           setSyncStatus('offline');
           setSyncError(reason || 'Firestore realtime listener disconnected.');
+        }
+      },
+      onPermissionDenied: () => {
+        if (mounted) {
+          setSuperAppRulesNeeded(true);
         }
       },
     });
@@ -1059,12 +1068,12 @@ export default function App() {
         </div>
       ) : null}
 
-      {syncStatus === 'connected' && superAppRulesNeeded && (
+      {firebaseConfigured && superAppRulesNeeded && (
         <div className="bg-amber-950/60 border-b border-amber-800/70 px-4 py-1.5 flex items-center justify-between gap-3 text-xs text-amber-200 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="truncate">
-              <strong>Firestore Rules Update Required ({ACTIVE_FIREBASE_CONFIG.projectId}):</strong> Map &amp; live facility reports are active, while Community, Events, Marketplace &amp; Academic collections require publishing the updated <code className="font-mono">firestore.rules</code> in Firebase Console.
+              <strong>Firestore Rules Update Required ({ACTIVE_FIREBASE_CONFIG.projectId}):</strong> Publish the updated <code className="font-mono">firestore.rules</code> in Firebase Console → Firestore Database → Rules so all Campus Radar collections sync across devices.
             </span>
           </div>
           <button

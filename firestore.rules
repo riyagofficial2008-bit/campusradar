@@ -524,7 +524,7 @@ service cloud.firestore {
     // --- Core Campus Map & Live Status Collections (Preserved) ---
     match /facilities/{facilityId} {
       allow get: if isValidId(facilityId);
-      allow list: if resource.data.id is string && request.query.limit <= 300;
+      allow list: if request.query.limit != null && request.query.limit <= 300;
       allow create: if isTrustedWriter()
         && isValidId(facilityId)
         && isValidCampusFacility(incoming(), facilityId)
@@ -545,7 +545,7 @@ service cloud.firestore {
 
     match /pinOverrides/{facilityId} {
       allow get: if isValidId(facilityId);
-      allow list: if resource.data.facilityId is string && request.query.limit <= 300;
+      allow list: if request.query.limit != null && request.query.limit <= 300;
       allow create: if isTrustedWriter()
         && isValidId(facilityId)
         && isValidPinOverride(incoming(), facilityId)
@@ -564,7 +564,7 @@ service cloud.firestore {
 
     match /statusReports/{reportId} {
       allow get: if isValidId(reportId);
-      allow list: if resource.data.facilityId is string && request.query.limit <= 500;
+      allow list: if request.query.limit != null && request.query.limit <= 500;
       allow create: if isTrustedWriter()
         && isValidId(reportId)
         && isValidStatusReport(incoming(), reportId)
@@ -636,7 +636,7 @@ service cloud.firestore {
     // --- Events & Clubs ---
     match /events/{eventId} {
       allow get: if isValidId(eventId);
-      allow list: if resource.data.id is string && request.query.limit <= 200;
+      allow list: if request.query.limit != null && request.query.limit <= 200;
       allow create: if isTrustedWriter()
         && isValidId(eventId)
         && isValidEvent(incoming(), eventId)
@@ -674,7 +674,7 @@ service cloud.firestore {
 
     match /clubs/{clubId} {
       allow get: if isValidId(clubId);
-      allow list: if resource.data.id is string && request.query.limit <= 150;
+      allow list: if request.query.limit != null && request.query.limit <= 150;
       allow create: if isTrustedWriter()
         && isValidId(clubId)
         && isValidClub(incoming(), clubId)
@@ -736,7 +736,7 @@ service cloud.firestore {
 
     match /comments/{commentId} {
       allow get: if isValidId(commentId);
-      allow list: if resource.data.postId is string && request.query.limit <= 300;
+      allow list: if request.query.limit != null && request.query.limit <= 300;
       allow create: if isTrustedWriter()
         && isValidId(commentId)
         && isValidComment(incoming(), commentId)
@@ -760,7 +760,7 @@ service cloud.firestore {
 
     match /groups/{groupId} {
       allow get: if isValidId(groupId);
-      allow list: if resource.data.id is string && request.query.limit <= 150;
+      allow list: if request.query.limit != null && request.query.limit <= 150;
       allow create: if isTrustedWriter()
         && isValidId(groupId)
         && isValidStudyGroup(incoming(), groupId)
@@ -820,7 +820,7 @@ service cloud.firestore {
 
     match /lost_found/{itemId} {
       allow get: if isValidId(itemId);
-      allow list: if resource.data.id is string && request.query.limit <= 200;
+      allow list: if request.query.limit != null && request.query.limit <= 200;
       allow create: if isTrustedWriter()
         && isValidId(itemId)
         && isValidLostFound(incoming(), itemId)
@@ -930,7 +930,7 @@ service cloud.firestore {
 
     match /polls/{pollId} {
       allow get: if isValidId(pollId);
-      allow list: if resource.data.id is string && request.query.limit <= 50;
+      allow list: if request.query.limit != null && request.query.limit <= 50;
       allow create: if isTrustedWriter()
         && isValidId(pollId)
         && isValidPoll(incoming(), pollId)

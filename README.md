@@ -30,9 +30,9 @@ Open `http://localhost:3000`.
 
 ## Shared Cloud Sync (Firebase Firestore + Auth)
 
-Campus Radar connects all devices to the same shared Cloud Firestore database (`firebase-applet-config.json`, project `fluid-boulevard-q7cdj`) using real-time `onSnapshot` listeners across `facilities`, `pinOverrides`, and `statusReports`.
+Campus Radar connects all devices to the same shared Cloud Firestore database (`campus-radar-c4c6d`) using real-time `onSnapshot` listeners across `facilities`, `pinOverrides`, and `statusReports`.
 
 - **Status Indicator**: Displays **CLOUD SYNC CONNECTED** when connected to Firestore, **OFFLINE** when network access is unavailable, or **LOCAL DEMO MODE** if Firebase configuration is removed.
-- **Authentication**: Google Sign-In is preconfigured. To also allow zero-login **Anonymous** student reporting from any device, open the [Firebase Console](https://console.firebase.google.com/) for project `fluid-boulevard-q7cdj`, go to **Build → Authentication → Sign-in method**, click **Add new provider → Anonymous**, toggle **Enable**, and save.
+- **Authentication**: Google Sign-In is preconfigured. To also allow zero-login **Anonymous** student reporting from any device, open the [Firebase Console](https://console.firebase.google.com/) for project `campus-radar-c4c6d`, go to **Build → Authentication → Sign-in method**, click **Add new provider → Anonymous**, toggle **Enable**, and save.
 - **Security Rules**: Deployed from `firestore.rules` and validated with `@firebase/eslint-plugin-security-rules`.
 

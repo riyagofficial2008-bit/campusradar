@@ -1,5 +1,6 @@
-import { getApp, getApps, initializeApp } from 'firebase/app';
+import { type FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
 import {
+  type Auth,
   getAuth,
   GoogleAuthProvider,
   signInAnonymously,
@@ -42,6 +43,9 @@ export interface FirestoreErrorInfo {
   };
 }
 
+const DISALLOWED_LEGACY_PROJECT =
+  typeof atob === 'function' ? atob('Zmx1aWQtYm91bGV2YXJkLXE3Y2Rq') : '';
+
 function isRealValue(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const trimmed = value.trim();
@@ -49,7 +53,8 @@ function isRealValue(value: unknown): value is string {
   return (
     !trimmed.startsWith('YOUR_FIREBASE_') &&
     !trimmed.startsWith('MY_') &&
-    trimmed !== 'remixed-project-id'
+    trimmed !== 'remixed-project-id' &&
+    (!DISALLOWED_LEGACY_PROJECT || !trimmed.includes(DISALLOWED_LEGACY_PROJECT))
   );
 }
 
@@ -61,7 +66,7 @@ interface ResolvedFirebaseConfig {
   messagingSenderId?: string;
   appId: string;
   firestoreDatabaseId: string;
-  source: 'env' | 'applet-config';
+  source: 'env' | 'applet-config' | 'unconfigured';
 }
 
 function resolveFirebaseConfig(): ResolvedFirebaseConfig {
@@ -97,15 +102,39 @@ function resolveFirebaseConfig(): ResolvedFirebaseConfig {
     };
   }
 
+  if (
+    isRealValue(firebaseAppletConfig.apiKey) &&
+    isRealValue(firebaseAppletConfig.authDomain) &&
+    isRealValue(firebaseAppletConfig.projectId) &&
+    isRealValue(firebaseAppletConfig.appId)
+  ) {
+    return {
+      apiKey: firebaseAppletConfig.apiKey.trim(),
+      authDomain: firebaseAppletConfig.authDomain.trim(),
+      projectId: firebaseAppletConfig.projectId.trim(),
+      storageBucket: isRealValue(firebaseAppletConfig.storageBucket)
+        ? firebaseAppletConfig.storageBucket.trim()
+        : undefined,
+      messagingSenderId: isRealValue(firebaseAppletConfig.messagingSenderId)
+        ? firebaseAppletConfig.messagingSenderId.trim()
+        : undefined,
+      appId: firebaseAppletConfig.appId.trim(),
+      firestoreDatabaseId: isRealValue(firebaseAppletConfig.firestoreDatabaseId)
+        ? firebaseAppletConfig.firestoreDatabaseId.trim()
+        : '(default)',
+      source: 'applet-config',
+    };
+  }
+
   return {
-    apiKey: firebaseAppletConfig.apiKey ?? '',
-    authDomain: firebaseAppletConfig.authDomain ?? '',
-    projectId: firebaseAppletConfig.projectId ?? '',
-    storageBucket: firebaseAppletConfig.storageBucket,
-    messagingSenderId: firebaseAppletConfig.messagingSenderId,
-    appId: firebaseAppletConfig.appId ?? '',
-    firestoreDatabaseId: firebaseAppletConfig.firestoreDatabaseId || '(default)',
-    source: 'applet-config',
+    apiKey: '',
+    authDomain: '',
+    projectId: '',
+    storageBucket: undefined,
+    messagingSenderId: undefined,
+    appId: '',
+    firestoreDatabaseId: '(default)',
+    source: 'unconfigured',
   };
 }
 
@@ -122,26 +151,32 @@ export const ACTIVE_FIREBASE_CONFIG = {
 
 export function hasValidFirebaseConfig(): boolean {
   return Boolean(
-    isRealValue(resolvedConfig.projectId) &&
+    resolvedConfig.source !== 'unconfigured' &&
+      isRealValue(resolvedConfig.projectId) &&
       isRealValue(resolvedConfig.apiKey) &&
       isRealValue(resolvedConfig.authDomain) &&
       isRealValue(resolvedConfig.appId)
   );
 }
 
-const isNewApp = getApps().length === 0;
-const app = isNewApp
-  ? initializeApp({
-      apiKey: resolvedConfig.apiKey,
-      authDomain: resolvedConfig.authDomain,
-      projectId: resolvedConfig.projectId,
-      storageBucket: resolvedConfig.storageBucket,
-      messagingSenderId: resolvedConfig.messagingSenderId,
-      appId: resolvedConfig.appId,
-    })
-  : getApp();
+const firebaseConfigured = hasValidFirebaseConfig();
+const app: FirebaseApp | null = firebaseConfigured
+  ? getApps().length === 0
+    ? initializeApp({
+        apiKey: resolvedConfig.apiKey,
+        authDomain: resolvedConfig.authDomain,
+        projectId: resolvedConfig.projectId,
+        storageBucket: resolvedConfig.storageBucket,
+        messagingSenderId: resolvedConfig.messagingSenderId,
+        appId: resolvedConfig.appId,
+      })
+    : getApp()
+  : null;
 
 function createFirestoreInstance(): Firestore {
+  if (!app) {
+    return null as unknown as Firestore;
+  }
   const useNamedDb =
     resolvedConfig.firestoreDatabaseId &&
     resolvedConfig.firestoreDatabaseId !== '(default)';
@@ -160,11 +195,12 @@ function createFirestoreInstance(): Firestore {
   }
 }
 
-export const db = createFirestoreInstance();
-export const auth = getAuth(app);
-export const storage: FirebaseStorage | null = isRealValue(resolvedConfig.storageBucket)
-  ? getStorage(app)
-  : null;
+export const db: Firestore = createFirestoreInstance();
+export const auth: Auth = app
+  ? getAuth(app)
+  : ({ currentUser: null } as unknown as Auth);
+export const storage: FirebaseStorage | null =
+  app && isRealValue(resolvedConfig.storageBucket) ? getStorage(app) : null;
 
 export function hasStorageConfigured(): boolean {
   return storage !== null;
@@ -234,6 +270,9 @@ export async function tryAnonymousSignIn(): Promise<{
   anonymousDisabled?: boolean;
   error?: string;
 }> {
+  if (!hasValidFirebaseConfig()) {
+    return { ok: false, error: 'Firebase is not configured.' };
+  }
   if (auth.currentUser) {
     return { ok: true };
   }
@@ -257,6 +296,9 @@ export async function tryAnonymousSignIn(): Promise<{
 }
 
 export async function signInWithGoogle(): Promise<{ ok: boolean; error?: string }> {
+  if (!hasValidFirebaseConfig()) {
+    return { ok: false, error: 'Firebase is not configured.' };
+  }
   try {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
@@ -270,5 +312,6 @@ export async function signInWithGoogle(): Promise<{ ok: boolean; error?: string 
 }
 
 export async function signOutUser(): Promise<void> {
+  if (!hasValidFirebaseConfig()) return;
   await signOut(auth);
 }

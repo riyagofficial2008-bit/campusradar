@@ -41,7 +41,7 @@ jobs:
           VITE_FIREBASE_DATABASE_ID: ${{ secrets.VITE_FIREBASE_DATABASE_ID || vars.VITE_FIREBASE_DATABASE_ID }}
         run: npm run build
 
-      - name: Verify compiled HTML references built assets
+      - name: Verify compiled HTML and Firebase project in dist
         run: |
           test -f dist/index.html
           if grep -q "/src/main.tsx" dist/index.html; then
@@ -49,6 +49,11 @@ jobs:
             exit 1
           fi
           grep -q "/campusradar/assets/" dist/index.html
+          if grep -rq "fluid-boulevard-q7cdj" dist/; then
+            echo "ERROR: dist/ contains legacy Firebase project fluid-boulevard-q7cdj"
+            exit 1
+          fi
+          grep -rq "campus-radar-c4c6d" dist/assets/
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

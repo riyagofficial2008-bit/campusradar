@@ -1,12 +1,12 @@
 {
-  "projectId": "fluid-boulevard-q7cdj",
-  "appId": "1:3505094189:web:1e311e3a25f5cecb7502a4",
-  "apiKey": "AIzaSyBf57xj36eCJ22IdXuDjPAnNIWxhyZli2M",
-  "authDomain": "fluid-boulevard-q7cdj.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-campusradar-f7528b33-e9dc-4ab1-9601-e25cf791ce28",
-  "storageBucket": "fluid-boulevard-q7cdj.firebasestorage.app",
-  "messagingSenderId": "3505094189",
+  "projectId": "campus-radar-c4c6d",
+  "appId": "1:724422322241:web:31fdf044b250aea1c1bec0",
+  "apiKey": "AIzaSyDyB1cOxHhV2X8Zkdq1lfsoRMyO_moB4iM",
+  "authDomain": "campus-radar-c4c6d.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "campus-radar-c4c6d",
+  "messagingSenderId": "724422322241",
   "measurementId": "",
-  "oAuthClientId": "3505094189-2u4iotid77gb0lv8pnaephoh4g2earb5.apps.googleusercontent.com",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }

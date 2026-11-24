@@ -21,6 +21,7 @@ import {
   tryAnonymousSignIn,
 } from '../firebase';
 import type { Facility, FacilityCategory, StatusReport } from '../types/campus';
+import { isOfflineError, isPermissionDeniedError } from './firestoreHelpers';
 
 const LOCAL_REPORTS_KEY = 'campus_radar_jecrc_reports_v1';
 const LOCAL_FACILITIES_KEY = 'campus_radar_jecrc_facilities_v1';
@@ -254,6 +255,7 @@ export async function fetchSharedCampusData(): Promise<{
   facilities: Facility[];
   pinOverrides: Record<string, PinOverride>;
   reports: StatusReport[];
+  permissionDenied?: boolean;
 }> {
   if (!hasValidFirebaseConfig()) {
     return {
@@ -266,6 +268,7 @@ export async function fetchSharedCampusData(): Promise<{
   let facilities: Facility[] = [];
   let pinOverrides: Record<string, PinOverride> = {};
   let reports: StatusReport[] = [];
+  let permissionDenied = false;
 
   try {
     const facSnap = await getDocsFromServer(
@@ -273,11 +276,14 @@ export async function fetchSharedCampusData(): Promise<{
     );
     facilities = facSnap.docs.map((d) => docToFacility(d.data(), d.id));
   } catch (err) {
-    const msg = err instanceof Error ? err.message.toLowerCase() : '';
-    if (!msg.includes('offline') && !msg.includes('unavailable')) {
-      handleFirestoreError(err, OperationType.LIST, 'facilities');
+    if (isPermissionDeniedError(err)) {
+      permissionDenied = true;
+    } else {
+      if (!isOfflineError(err)) {
+        handleFirestoreError(err, OperationType.LIST, 'facilities');
+      }
+      throw err;
     }
-    throw err;
   }
 
   try {
@@ -289,11 +295,14 @@ export async function fetchSharedCampusData(): Promise<{
     }
     pinOverrides = nextMap;
   } catch (err) {
-    const msg = err instanceof Error ? err.message.toLowerCase() : '';
-    if (!msg.includes('offline') && !msg.includes('unavailable')) {
-      handleFirestoreError(err, OperationType.LIST, 'pinOverrides');
+    if (isPermissionDeniedError(err)) {
+      permissionDenied = true;
+    } else {
+      if (!isOfflineError(err)) {
+        handleFirestoreError(err, OperationType.LIST, 'pinOverrides');
+      }
+      throw err;
     }
-    throw err;
   }
 
   try {
@@ -302,14 +311,17 @@ export async function fetchSharedCampusData(): Promise<{
     );
     reports = repSnap.docs.map((d) => docToStatusReport(d.data(), d.id));
   } catch (err) {
-    const msg = err instanceof Error ? err.message.toLowerCase() : '';
-    if (!msg.includes('offline') && !msg.includes('unavailable')) {
-      handleFirestoreError(err, OperationType.LIST, 'statusReports');
+    if (isPermissionDeniedError(err)) {
+      permissionDenied = true;
+    } else {
+      if (!isOfflineError(err)) {
+        handleFirestoreError(err, OperationType.LIST, 'statusReports');
+      }
+      throw err;
     }
-    throw err;
   }
 
-  return { facilities, pinOverrides, reports };
+  return { facilities, pinOverrides, reports, permissionDenied };
 }
 
 export interface SharedSyncCallbacks {
@@ -318,6 +330,7 @@ export interface SharedSyncCallbacks {
   onReports: (reports: StatusReport[]) => void;
   onSyncOnline: () => void;
   onSyncOffline: (reason: string) => void;
+  onPermissionDenied?: (path: string, reason: string) => void;
 }
 
 export function subscribeToSharedCampusData(callbacks: SharedSyncCallbacks): () => void {
@@ -327,12 +340,11 @@ export function subscribeToSharedCampusData(callbacks: SharedSyncCallbacks): () 
 
   const handleListenerError = (err: unknown, path: string) => {
     const msg = err instanceof Error ? err.message : String(err);
-    const lower = msg.toLowerCase();
-    if (
-      lower.includes('offline') ||
-      lower.includes('unavailable') ||
-      lower.includes('network')
-    ) {
+    if (isPermissionDeniedError(err)) {
+      callbacks.onPermissionDenied?.(path, msg);
+      return;
+    }
+    if (isOfflineError(err)) {
       callbacks.onSyncOffline(msg);
       return;
     }
