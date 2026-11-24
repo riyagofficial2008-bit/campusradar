@@ -4,8 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({command, isPreview}) => {
+  const isProdOrPreview = command === 'build' || Boolean(isPreview);
   return {
+    base: isProdOrPreview ? (process.env.VITE_BASE_PATH || '/campusradar/') : '/',
     plugins: [
       react(),
       tailwindcss(),
