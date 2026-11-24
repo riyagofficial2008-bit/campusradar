@@ -1,0 +1,488 @@
+{
+  "entities": {
+    "CampusFacility": {
+      "title": "CampusFacility",
+      "description": "A student-added campus facility (water station, charging point, washroom, etc.) shared across all devices.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "category": {
+          "type": "string",
+          "enum": [
+            "academic", "cafeteria", "charging", "water", "library",
+            "washroom", "medical", "parking", "lab", "hostel",
+            "sports", "atm", "bus_stop", "shop", "other"
+          ],
+          "maxLength": 32
+        },
+        "building": { "type": "string", "maxLength": 80 },
+        "floor": { "type": "string", "maxLength": 40 },
+        "description": { "type": "string", "maxLength": 200 },
+        "lat": { "type": "number" },
+        "lon": { "type": "number" },
+        "campusId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "campusName": { "type": "string", "maxLength": 140 },
+        "scope": { "type": "string", "enum": ["inside_campus", "nearby_campus", "uncertain"], "maxLength": 24 },
+        "isStudentAdded": { "type": "boolean" },
+        "isApproximateLocation": { "type": "boolean" },
+        "verified": { "type": "boolean" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "name", "category", "lat", "lon", "scope",
+        "isStudentAdded", "isApproximateLocation", "verified", "createdBy", "createdAt"
+      ]
+    },
+    "PinOverride": {
+      "title": "PinOverride",
+      "description": "Shared map pin position adjustment and verification state for any facility.",
+      "type": "object",
+      "properties": {
+        "facilityId": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "lat": { "type": "number" },
+        "lon": { "type": "number" },
+        "verified": { "type": "boolean" },
+        "isApproximateLocation": { "type": "boolean" },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["facilityId", "lat", "lon", "verified", "isApproximateLocation", "updatedBy", "updatedAt"]
+    },
+    "StatusReport": {
+      "title": "StatusReport",
+      "description": "A time-stamped student observation for a specific campus facility, building, and floor.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "facilityId": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "facilityName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "facilityCategory": {
+          "type": "string",
+          "enum": [
+            "academic", "cafeteria", "charging", "water", "library",
+            "washroom", "medical", "parking", "lab", "hostel",
+            "sports", "atm", "bus_stop", "shop", "other"
+          ],
+          "maxLength": 32
+        },
+        "campusId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "building": { "type": "string", "maxLength": 80 },
+        "floor": { "type": "string", "maxLength": 40 },
+        "statusValue": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "secondaryValue": { "type": "string", "maxLength": 60 },
+        "seatingValue": { "type": "string", "maxLength": 60 },
+        "freePointsCount": { "type": "number" },
+        "totalPointsCount": { "type": "number" },
+        "note": { "type": "string", "maxLength": 280 },
+        "reporterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "reporterLabel": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "confirmations": { "type": "number" },
+        "confirmedBy": { "type": "array", "maxLength": 100 }
+      },
+      "required": [
+        "id", "facilityId", "facilityName", "facilityCategory",
+        "statusValue", "reporterId", "createdAt", "confirmations", "confirmedBy"
+      ]
+    },
+    "PublicStudentProfile": {
+      "title": "PublicStudentProfile",
+      "description": "Public campus student profile with zero private PII (no email/phone).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "department": { "type": "string", "maxLength": 80 },
+        "course": { "type": "string", "maxLength": 80 },
+        "year": { "type": "string", "maxLength": 24 },
+        "section": { "type": "string", "maxLength": 24 },
+        "bio": { "type": "string", "maxLength": 240 },
+        "interests": { "type": "array", "maxLength": 12 },
+        "photoDataUrl": { "type": "string", "maxLength": 180000 },
+        "visibility": { "type": "string", "enum": ["campus", "connections", "private"], "maxLength": 24 },
+        "allowDirectMessages": { "type": "string", "enum": ["everyone", "department", "none"], "maxLength": 24 },
+        "isVerifiedOrganizer": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "visibility", "allowDirectMessages", "isVerifiedOrganizer", "createdAt", "updatedAt"]
+    },
+    "PrivateUserSettings": {
+      "title": "PrivateUserSettings",
+      "description": "Owner-only private account preferences, blocked UIDs, saved events, and dashboard layout.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "savedEventIds": { "type": "array", "maxLength": 100 },
+        "blockedUids": { "type": "array", "maxLength": 100 },
+        "dashboardWidgets": { "type": "array", "maxLength": 20 },
+        "notifyEvents": { "type": "boolean" },
+        "notifyClasses": { "type": "boolean" },
+        "notifyMessages": { "type": "boolean" },
+        "notifySafety": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "savedEventIds", "blockedUids", "dashboardWidgets", "notifyEvents", "notifyClasses", "notifyMessages", "notifySafety", "updatedAt"]
+    },
+    "CampusEvent": {
+      "title": "CampusEvent",
+      "description": "University event, workshop, or competition.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "category": { "type": "string", "enum": ["workshop", "competition", "cultural", "seminar", "sports", "club_meet", "other"], "maxLength": 32 },
+        "organizerName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "clubId": { "type": "string", "maxLength": 128 },
+        "locationName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "facilityId": { "type": "string", "maxLength": 128 },
+        "startIso": { "type": "string", "maxLength": 40 },
+        "endIso": { "type": "string", "maxLength": 40 },
+        "description": { "type": "string", "minLength": 5, "maxLength": 600 },
+        "isOfficial": { "type": "boolean" },
+        "registrationCount": { "type": "number" },
+        "registeredUids": { "type": "array", "maxLength": 500 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "category", "organizerName", "locationName", "startIso", "description", "isOfficial", "registrationCount", "registeredUids", "createdBy", "createdAt"]
+    },
+    "CampusClub": {
+      "title": "CampusClub",
+      "description": "University club or student society.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 40 },
+        "description": { "type": "string", "maxLength": 400 },
+        "meetingLocation": { "type": "string", "maxLength": 120 },
+        "memberUids": { "type": "array", "maxLength": 500 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "category", "description", "memberUids", "createdBy", "createdAt"]
+    },
+    "CommunityPost": {
+      "title": "CommunityPost",
+      "description": "Student community discussion, question, resource, or project-partner post.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postType": { "type": "string", "enum": ["discussion", "question", "resource", "project_partner", "announcement"], "maxLength": 32 },
+        "title": { "type": "string", "minLength": 3, "maxLength": 140 },
+        "body": { "type": "string", "minLength": 3, "maxLength": 1200 },
+        "department": { "type": "string", "maxLength": 80 },
+        "resourceUrl": { "type": "string", "maxLength": 300 },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "likedBy": { "type": "array", "maxLength": 500 },
+        "likesCount": { "type": "number" },
+        "commentsCount": { "type": "number" },
+        "reportedBy": { "type": "array", "maxLength": 100 },
+        "isHidden": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "postType", "title", "body", "authorUid", "authorName", "likedBy", "likesCount", "commentsCount", "reportedBy", "isHidden", "createdAt"]
+    },
+    "PostComment": {
+      "title": "PostComment",
+      "description": "Comment or reply on a community post.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postId": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "body": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "postId", "body", "authorUid", "authorName", "createdAt"]
+    },
+    "DirectMessage": {
+      "title": "DirectMessage",
+      "description": "Private peer-to-peer message strictly visible only to sender and recipient.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "participants": { "type": "array", "maxLength": 2 },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "recipientId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "recipientName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "contextLabel": { "type": "string", "maxLength": 140 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 800 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "participants", "senderId", "senderName", "recipientId", "recipientName", "text", "createdAt"]
+    },
+    "StudyGroup": {
+      "title": "StudyGroup",
+      "description": "Student study group or project collaboration team.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "groupType": { "type": "string", "enum": ["study_group", "project_team", "doubt_circle"], "maxLength": 24 },
+        "description": { "type": "string", "maxLength": 400 },
+        "meetingSpot": { "type": "string", "maxLength": 120 },
+        "memberUids": { "type": "array", "maxLength": 100 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "subject", "groupType", "description", "memberUids", "createdBy", "createdAt"]
+    },
+    "MarketplaceListing": {
+      "title": "MarketplaceListing",
+      "description": "Student marketplace item for textbooks, notes, calculators, stationery, or lab gear.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "category": { "type": "string", "enum": ["textbooks", "notes", "calculators", "stationery", "lab_equipment", "other"], "maxLength": 32 },
+        "priceInr": { "type": "number" },
+        "condition": { "type": "string", "enum": ["new", "like_new", "good", "used"], "maxLength": 24 },
+        "description": { "type": "string", "maxLength": 500 },
+        "pickupSpot": { "type": "string", "maxLength": 120 },
+        "photoDataUrl": { "type": "string", "maxLength": 180000 },
+        "sellerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sellerName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "status": { "type": "string", "enum": ["available", "sold", "removed"], "maxLength": 24 },
+        "reportedBy": { "type": "array", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "category", "priceInr", "condition", "description", "sellerUid", "sellerName", "status", "reportedBy", "createdAt"]
+    },
+    "LostFoundItem": {
+      "title": "LostFoundItem",
+      "description": "Lost or found item notice on campus.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "itemType": { "type": "string", "enum": ["lost", "found"], "maxLength": 16 },
+        "title": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "building": { "type": "string", "maxLength": 80 },
+        "floor": { "type": "string", "maxLength": 40 },
+        "approximateLocation": { "type": "string", "maxLength": 140 },
+        "eventDate": { "type": "string", "maxLength": 32 },
+        "description": { "type": "string", "maxLength": 450 },
+        "imageUrls": { "type": "array", "maxLength": 4 },
+        "photoDataUrl": { "type": "string", "maxLength": 180000 },
+        "posterUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "posterName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "status": { "type": "string", "enum": ["open", "returned"], "maxLength": 24 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "itemType", "title", "description", "posterUid", "posterName", "status", "createdAt"]
+    },
+    "TimetableSlot": {
+      "title": "TimetableSlot",
+      "description": "Student's personal class schedule entry (owner-private).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "dayOfWeek": { "type": "string", "enum": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], "maxLength": 10 },
+        "startTime": { "type": "string", "maxLength": 16 },
+        "endTime": { "type": "string", "maxLength": 16 },
+        "subject": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "building": { "type": "string", "maxLength": 80 },
+        "room": { "type": "string", "maxLength": 40 },
+        "reminderEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "dayOfWeek", "startTime", "endTime", "subject", "reminderEnabled", "createdAt"]
+    },
+    "AssignmentItem": {
+      "title": "AssignmentItem",
+      "description": "Student's personal assignment or exam countdown entry (owner-private).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "kind": { "type": "string", "enum": ["assignment", "exam"], "maxLength": 16 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "course": { "type": "string", "maxLength": 80 },
+        "dueDate": { "type": "string", "maxLength": 32 },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "kind", "title", "dueDate", "completed", "createdAt"]
+    },
+    "CampusNotification": {
+      "title": "CampusNotification",
+      "description": "User-scoped notification item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 280 },
+        "category": { "type": "string", "enum": ["event", "message", "academic", "safety", "feedback"], "maxLength": 24 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "body", "category", "read", "createdAt"]
+    },
+    "FeedbackItem": {
+      "title": "FeedbackItem",
+      "description": "Campus feedback, complaint, or suggestion with anonymous separation and status tracking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "feedbackType": { "type": "string", "enum": ["anonymous_feedback", "facility_complaint", "suggestion"], "maxLength": 32 },
+        "category": { "type": "string", "maxLength": 40 },
+        "subject": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "details": { "type": "string", "minLength": 5, "maxLength": 800 },
+        "building": { "type": "string", "maxLength": 80 },
+        "isAnonymous": { "type": "boolean" },
+        "visibility": { "type": "string", "enum": ["public", "private"], "maxLength": 16 },
+        "submitterUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "status": { "type": "string", "enum": ["submitted", "in_review", "resolved"], "maxLength": 24 },
+        "adminResponse": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "feedbackType", "category", "subject", "details", "isAnonymous", "visibility", "submitterUid", "status", "createdAt"]
+    },
+    "CampusPoll": {
+      "title": "CampusPoll",
+      "description": "Student campus poll for quick collective feedback.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "question": { "type": "string", "minLength": 5, "maxLength": 160 },
+        "options": { "type": "array", "maxLength": 6 },
+        "voteCounts": { "type": "array", "maxLength": 6 },
+        "votedUids": { "type": "array", "maxLength": 500 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "question", "options", "voteCounts", "votedUids", "createdBy", "createdAt"]
+    },
+    "SafetyReport": {
+      "title": "SafetyReport",
+      "description": "Unsafe location or maintenance issue report on campus (does not auto-dispatch emergency services).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reportType": { "type": "string", "enum": ["unsafe_location", "maintenance"], "maxLength": 24 },
+        "building": { "type": "string", "maxLength": 80 },
+        "floor": { "type": "string", "maxLength": 40 },
+        "locationNote": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 5, "maxLength": 600 },
+        "severity": { "type": "string", "enum": ["low", "medium", "high"], "maxLength": 16 },
+        "reporterUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "status": { "type": "string", "enum": ["open", "acknowledged", "resolved"], "maxLength": 24 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "reportType", "locationNote", "description", "severity", "reporterUid", "status", "createdAt"]
+    },
+    "RoleMarker": {
+      "title": "RoleMarker",
+      "description": "Admin or verified event organizer role record keyed by UID.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "label": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/facilities/{facilityId}": {
+      "schema": { "$ref": "#/entities/CampusFacility" },
+      "description": "Shared student-added campus facilities (water stations, charging points, etc.)."
+    },
+    "/pinOverrides/{facilityId}": {
+      "schema": { "$ref": "#/entities/PinOverride" },
+      "description": "Shared map pin coordinate adjustments and verification flags."
+    },
+    "/statusReports/{reportId}": {
+      "schema": { "$ref": "#/entities/StatusReport" },
+      "description": "Real-time crowd, charging, water, and facility status reports from students."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/PublicStudentProfile" },
+      "description": "Public student profile information (zero private PII)."
+    },
+    "/user_private/{userId}": {
+      "schema": { "$ref": "#/entities/PrivateUserSettings" },
+      "description": "Owner-only account settings, privacy blocklist, saved events, and dashboard layout."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/CampusEvent" },
+      "description": "Campus events, workshops, and competitions."
+    },
+    "/clubs/{clubId}": {
+      "schema": { "$ref": "#/entities/CampusClub" },
+      "description": "University clubs and student societies."
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/CommunityPost" },
+      "description": "Student community discussions, questions, resources, and partner search."
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/PostComment" },
+      "description": "Comments and replies linked to community posts."
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/DirectMessage" },
+      "description": "Private peer-to-peer direct messages scoped to sender and recipient."
+    },
+    "/groups/{groupId}": {
+      "schema": { "$ref": "#/entities/StudyGroup" },
+      "description": "Study groups and project collaboration teams."
+    },
+    "/marketplace_listings/{listingId}": {
+      "schema": { "$ref": "#/entities/MarketplaceListing" },
+      "description": "Student-to-student used academic and campus item listings."
+    },
+    "/lost_found/{itemId}": {
+      "schema": { "$ref": "#/entities/LostFoundItem" },
+      "description": "Lost and found item reports across campus buildings and floors."
+    },
+    "/timetables/{slotId}": {
+      "schema": { "$ref": "#/entities/TimetableSlot" },
+      "description": "Personal student-entered timetable entries."
+    },
+    "/assignments/{assignmentId}": {
+      "schema": { "$ref": "#/entities/AssignmentItem" },
+      "description": "Personal student assignment tracker and exam countdown entries."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/CampusNotification" },
+      "description": "User-scoped notifications for messages, events, and reminders."
+    },
+    "/feedback/{feedbackId}": {
+      "schema": { "$ref": "#/entities/FeedbackItem" },
+      "description": "Anonymous campus feedback, facility complaints, and suggestions."
+    },
+    "/polls/{pollId}": {
+      "schema": { "$ref": "#/entities/CampusPoll" },
+      "description": "Student campus polls."
+    },
+    "/safety_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/SafetyReport" },
+      "description": "Unsafe location and campus maintenance reports."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/RoleMarker" },
+      "description": "Authorized campus administrator UIDs."
+    },
+    "/organizers/{userId}": {
+      "schema": { "$ref": "#/entities/RoleMarker" },
+      "description": "Verified campus event organizer UIDs."
+    }
+  }
+}

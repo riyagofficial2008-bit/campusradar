@@ -1,0 +1,6 @@
+{
+  "name": "CAMPUS RADAR – JECRC University",
+  "description": "Live campus map, building finder, charging point finder, water station finder, and student-reported conditions for JECRC University, Jaipur.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

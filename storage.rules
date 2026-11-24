@@ -1,0 +1,30 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Global default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Lost & Found object images: lost_found/{userId}/{itemId}/{fileName}
+    match /lost_found/{userId}/{itemId}/{fileName} {
+      // Campus Lost & Found object photos are viewable with notice listings
+      allow read: if true;
+
+      // Authenticated uploader only, scoped to own UID folder, <= 5 MB, JPG/JPEG/PNG/WEBP only
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && userId.matches('^[a-zA-Z0-9_\\-]+$')
+        && itemId.matches('^[a-zA-Z0-9_\\-]+$')
+        && fileName.matches('^[a-zA-Z0-9_.\\-]+$')
+        && request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+
+      // Only the uploader can delete their uploaded object photo
+      allow delete: if request.auth != null
+        && request.auth.uid == userId;
+    }
+  }
+}

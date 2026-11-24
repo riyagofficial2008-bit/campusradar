@@ -1,0 +1,973 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 2 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isTrustedWriter() {
+      return isSignedIn() && (
+        request.auth.token.firebase.sign_in_provider == 'anonymous' ||
+        request.auth.token.email_verified == true
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'riyagupta859859@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isVerifiedOrganizerOrAdmin() {
+      return isAdmin() || (
+        isSignedIn() && exists(/databases/$(database)/documents/organizers/$(request.auth.uid))
+      );
+    }
+
+    function isValidCategory(cat) {
+      return cat in [
+        'academic', 'cafeteria', 'charging', 'water', 'library',
+        'washroom', 'medical', 'parking', 'lab', 'hostel',
+        'sports', 'atm', 'bus_stop', 'shop', 'other'
+      ];
+    }
+
+    function isValidCoords(lat, lon) {
+      return lat is number && lon is number &&
+        lat >= -90 && lat <= 90 &&
+        lon >= -180 && lon <= 180;
+    }
+
+    function isStringListBounded(arr, maxLen, maxItemLen) {
+      return arr is list
+        && arr.size() <= maxLen
+        && (arr.size() == 0 || (arr[0] is string && arr[0].size() <= maxItemLen));
+    }
+
+    function isValidImageUrlList(arr) {
+      return arr is list
+        && arr.size() <= 4
+        && (arr.size() < 1 || (arr[0] is string && arr[0].size() >= 12 && arr[0].size() <= 1500 && arr[0].matches('^https://.*')))
+        && (arr.size() < 2 || (arr[1] is string && arr[1].size() >= 12 && arr[1].size() <= 1500 && arr[1].matches('^https://.*')))
+        && (arr.size() < 3 || (arr[2] is string && arr[2].size() >= 12 && arr[2].size() <= 1500 && arr[2].matches('^https://.*')))
+        && (arr.size() < 4 || (arr[3] is string && arr[3].size() >= 12 && arr[3].size() <= 1500 && arr[3].matches('^https://.*')));
+    }
+
+    // --- Validation Blueprints ---
+    function isValidCampusFacility(data, docId) {
+      return data.keys().hasAll([
+          'id', 'name', 'category', 'lat', 'lon', 'scope',
+          'isStudentAdded', 'isApproximateLocation', 'verified',
+          'createdBy', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'name', 'category', 'building', 'floor', 'description',
+          'lat', 'lon', 'campusId', 'campusName', 'scope',
+          'isStudentAdded', 'isApproximateLocation', 'verified',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 120
+        && data.category is string && isValidCategory(data.category)
+        && (!('building' in data) || (data.building is string && data.building.size() <= 80))
+        && (!('floor' in data) || (data.floor is string && data.floor.size() <= 40))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 200))
+        && isValidCoords(data.lat, data.lon)
+        && (!('campusId' in data) || isValidId(data.campusId))
+        && (!('campusName' in data) || (data.campusName is string && data.campusName.size() <= 140))
+        && data.scope in ['inside_campus', 'nearby_campus', 'uncertain']
+        && data.isStudentAdded == true
+        && data.isApproximateLocation is bool
+        && data.verified is bool
+        && data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidPinOverride(data, docId) {
+      return data.keys().hasAll([
+          'facilityId', 'lat', 'lon', 'verified',
+          'isApproximateLocation', 'updatedBy', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'facilityId', 'lat', 'lon', 'verified',
+          'isApproximateLocation', 'updatedBy', 'updatedAt'
+        ])
+        && data.facilityId == docId
+        && isValidId(data.facilityId)
+        && isValidCoords(data.lat, data.lon)
+        && data.verified is bool
+        && data.isApproximateLocation is bool
+        && data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStatusReport(data, docId) {
+      return data.keys().hasAll([
+          'id', 'facilityId', 'facilityName', 'facilityCategory',
+          'statusValue', 'reporterId', 'createdAt', 'confirmations', 'confirmedBy'
+        ])
+        && data.keys().hasOnly([
+          'id', 'facilityId', 'facilityName', 'facilityCategory',
+          'campusId', 'building', 'floor', 'statusValue',
+          'secondaryValue', 'seatingValue', 'freePointsCount', 'totalPointsCount',
+          'note', 'reporterId', 'reporterLabel', 'createdAt',
+          'confirmations', 'confirmedBy'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && isValidId(data.facilityId)
+        && data.facilityName is string && data.facilityName.size() >= 1 && data.facilityName.size() <= 120
+        && data.facilityCategory is string && isValidCategory(data.facilityCategory)
+        && (!('campusId' in data) || isValidId(data.campusId))
+        && (!('building' in data) || (data.building is string && data.building.size() <= 80))
+        && (!('floor' in data) || (data.floor is string && data.floor.size() <= 40))
+        && data.statusValue is string && data.statusValue.size() >= 1 && data.statusValue.size() <= 80
+        && (!('secondaryValue' in data) || (data.secondaryValue is string && data.secondaryValue.size() <= 60))
+        && (!('seatingValue' in data) || (data.seatingValue is string && data.seatingValue.size() <= 60))
+        && (!('freePointsCount' in data) || (data.freePointsCount is int && data.freePointsCount >= 0 && data.freePointsCount <= 200))
+        && (!('totalPointsCount' in data) || (data.totalPointsCount is int && data.totalPointsCount >= 1 && data.totalPointsCount <= 200))
+        && (!('note' in data) || (data.note is string && data.note.size() <= 280))
+        && data.reporterId is string && data.reporterId.size() >= 1 && data.reporterId.size() <= 128
+        && (!('reporterLabel' in data) || (data.reporterLabel is string && data.reporterLabel.size() <= 40))
+        && data.createdAt is timestamp
+        && data.confirmations is int && data.confirmations >= 0 && data.confirmations <= 500
+        && isStringListBounded(data.confirmedBy, 100, 128);
+    }
+
+    function isValidPublicProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'visibility', 'allowDirectMessages',
+          'isVerifiedOrganizer', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'department', 'course', 'year', 'section',
+          'bio', 'interests', 'photoDataUrl', 'visibility', 'allowDirectMessages',
+          'isVerifiedOrganizer', 'createdAt', 'updatedAt'
+        ])
+        && data.uid == userId
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 60
+        && (!('department' in data) || (data.department is string && data.department.size() <= 80))
+        && (!('course' in data) || (data.course is string && data.course.size() <= 80))
+        && (!('year' in data) || (data.year is string && data.year.size() <= 24))
+        && (!('section' in data) || (data.section is string && data.section.size() <= 24))
+        && (!('bio' in data) || (data.bio is string && data.bio.size() <= 240))
+        && (!('interests' in data) || isStringListBounded(data.interests, 12, 40))
+        && (!('photoDataUrl' in data) || (data.photoDataUrl is string && data.photoDataUrl.size() <= 180000))
+        && data.visibility in ['campus', 'connections', 'private']
+        && data.allowDirectMessages in ['everyone', 'department', 'none']
+        && data.isVerifiedOrganizer is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPrivateSettings(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'savedEventIds', 'blockedUids', 'dashboardWidgets',
+          'notifyEvents', 'notifyClasses', 'notifyMessages', 'notifySafety', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'savedEventIds', 'blockedUids', 'dashboardWidgets',
+          'notifyEvents', 'notifyClasses', 'notifyMessages', 'notifySafety', 'updatedAt'
+        ])
+        && data.uid == userId
+        && isValidId(data.uid)
+        && isStringListBounded(data.savedEventIds, 100, 128)
+        && isStringListBounded(data.blockedUids, 100, 128)
+        && isStringListBounded(data.dashboardWidgets, 20, 40)
+        && data.notifyEvents is bool
+        && data.notifyClasses is bool
+        && data.notifyMessages is bool
+        && data.notifySafety is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEvent(data, docId) {
+      return data.keys().hasAll([
+          'id', 'title', 'category', 'organizerName', 'locationName',
+          'startIso', 'description', 'isOfficial', 'registrationCount',
+          'registeredUids', 'createdBy', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'title', 'category', 'organizerName', 'clubId', 'locationName',
+          'facilityId', 'startIso', 'endIso', 'description', 'isOfficial',
+          'registrationCount', 'registeredUids', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 120
+        && data.category in ['workshop', 'competition', 'cultural', 'seminar', 'sports', 'club_meet', 'other']
+        && data.organizerName is string && data.organizerName.size() >= 2 && data.organizerName.size() <= 80
+        && (!('clubId' in data) || isValidId(data.clubId))
+        && data.locationName is string && data.locationName.size() >= 2 && data.locationName.size() <= 120
+        && (!('facilityId' in data) || isValidId(data.facilityId))
+        && data.startIso is string && data.startIso.size() >= 10 && data.startIso.size() <= 40
+        && (!('endIso' in data) || (data.endIso is string && data.endIso.size() <= 40))
+        && data.description is string && data.description.size() >= 5 && data.description.size() <= 600
+        && data.isOfficial is bool
+        && data.registrationCount is int && data.registrationCount >= 0 && data.registrationCount <= 2000
+        && isStringListBounded(data.registeredUids, 500, 128)
+        && data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidClub(data, docId) {
+      return data.keys().hasAll([
+          'id', 'name', 'category', 'description', 'memberUids', 'createdBy', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'name', 'category', 'description', 'meetingLocation', 'memberUids', 'createdBy', 'createdAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 40
+        && data.description is string && data.description.size() >= 5 && data.description.size() <= 400
+        && (!('meetingLocation' in data) || (data.meetingLocation is string && data.meetingLocation.size() <= 120))
+        && isStringListBounded(data.memberUids, 500, 128)
+        && data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPost(data, docId) {
+      return data.keys().hasAll([
+          'id', 'postType', 'title', 'body', 'authorUid', 'authorName',
+          'likedBy', 'likesCount', 'commentsCount', 'reportedBy', 'isHidden', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'postType', 'title', 'body', 'department', 'resourceUrl',
+          'authorUid', 'authorName', 'likedBy', 'likesCount', 'commentsCount',
+          'reportedBy', 'isHidden', 'createdAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.postType in ['discussion', 'question', 'resource', 'project_partner', 'announcement']
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 140
+        && data.body is string && data.body.size() >= 3 && data.body.size() <= 1200
+        && (!('department' in data) || (data.department is string && data.department.size() <= 80))
+        && (!('resourceUrl' in data) || (data.resourceUrl is string && data.resourceUrl.size() <= 300))
+        && data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60
+        && isStringListBounded(data.likedBy, 500, 128)
+        && data.likesCount is int && data.likesCount >= 0 && data.likesCount <= 5000
+        && data.commentsCount is int && data.commentsCount >= 0 && data.commentsCount <= 5000
+        && isStringListBounded(data.reportedBy, 100, 128)
+        && data.isHidden is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidComment(data, docId) {
+      return data.keys().hasAll(['id', 'postId', 'body', 'authorUid', 'authorName', 'createdAt'])
+        && data.keys().hasOnly(['id', 'postId', 'body', 'authorUid', 'authorName', 'createdAt'])
+        && data.id == docId
+        && isValidId(data.id)
+        && isValidId(data.postId)
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 500
+        && data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60
+        && data.createdAt is timestamp;
+    }
+
+    function isValidDirectMessage(data, docId) {
+      return data.keys().hasAll([
+          'id', 'participants', 'senderId', 'senderName',
+          'recipientId', 'recipientName', 'text', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'participants', 'senderId', 'senderName',
+          'recipientId', 'recipientName', 'contextLabel', 'text', 'createdAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.participants is list && data.participants.size() == 2
+        && data.senderId is string && isValidId(data.senderId)
+        && data.recipientId is string && isValidId(data.recipientId)
+        && data.senderId != data.recipientId
+        && data.senderId in data.participants
+        && data.recipientId in data.participants
+        && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60
+        && data.recipientName is string && data.recipientName.size() >= 1 && data.recipientName.size() <= 60
+        && (!('contextLabel' in data) || (data.contextLabel is string && data.contextLabel.size() <= 140))
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 800
+        && data.createdAt is timestamp;
+    }
+
+    function isValidStudyGroup(data, docId) {
+      return data.keys().hasAll([
+          'id', 'name', 'subject', 'groupType', 'description', 'memberUids', 'createdBy', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'name', 'subject', 'groupType', 'description', 'meetingSpot',
+          'memberUids', 'createdBy', 'createdByName', 'createdAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.subject is string && data.subject.size() >= 2 && data.subject.size() <= 80
+        && data.groupType in ['study_group', 'project_team', 'doubt_circle']
+        && data.description is string && data.description.size() >= 3 && data.description.size() <= 400
+        && (!('meetingSpot' in data) || (data.meetingSpot is string && data.meetingSpot.size() <= 120))
+        && isStringListBounded(data.memberUids, 100, 128)
+        && data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128
+        && (!('createdByName' in data) || (data.createdByName is string && data.createdByName.size() <= 60))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidMarketplaceListing(data, docId) {
+      return data.keys().hasAll([
+          'id', 'title', 'category', 'priceInr', 'condition', 'description',
+          'sellerUid', 'sellerName', 'status', 'reportedBy', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'title', 'category', 'priceInr', 'condition', 'description',
+          'pickupSpot', 'photoDataUrl', 'sellerUid', 'sellerName',
+          'status', 'reportedBy', 'createdAt', 'updatedAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 120
+        && data.category in ['textbooks', 'notes', 'calculators', 'stationery', 'lab_equipment', 'other']
+        && data.priceInr is number && data.priceInr >= 0 && data.priceInr <= 100000
+        && data.condition in ['new', 'like_new', 'good', 'used']
+        && data.description is string && data.description.size() >= 3 && data.description.size() <= 500
+        && (!('pickupSpot' in data) || (data.pickupSpot is string && data.pickupSpot.size() <= 120))
+        && (!('photoDataUrl' in data) || (data.photoDataUrl is string && data.photoDataUrl.size() <= 180000))
+        && data.sellerUid is string && data.sellerUid.size() >= 1 && data.sellerUid.size() <= 128
+        && data.sellerName is string && data.sellerName.size() >= 1 && data.sellerName.size() <= 60
+        && data.status in ['available', 'sold', 'removed']
+        && isStringListBounded(data.reportedBy, 100, 128)
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidLostFound(data, docId) {
+      return data.keys().hasAll([
+          'id', 'itemType', 'title', 'description', 'posterUid', 'posterName', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'itemType', 'title', 'building', 'floor', 'approximateLocation',
+          'eventDate', 'description', 'imageUrls', 'photoDataUrl', 'posterUid', 'posterName',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.itemType in ['lost', 'found']
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 120
+        && (!('building' in data) || (data.building is string && data.building.size() <= 80))
+        && (!('floor' in data) || (data.floor is string && data.floor.size() <= 40))
+        && (!('approximateLocation' in data) || (data.approximateLocation is string && data.approximateLocation.size() <= 140))
+        && (!('eventDate' in data) || (data.eventDate is string && data.eventDate.size() <= 32))
+        && data.description is string && data.description.size() >= 3 && data.description.size() <= 450
+        && (!('imageUrls' in data) || isValidImageUrlList(data.imageUrls))
+        && (!('photoDataUrl' in data) || (data.photoDataUrl is string && data.photoDataUrl.size() <= 180000))
+        && data.posterUid is string && data.posterUid.size() >= 1 && data.posterUid.size() <= 128
+        && data.posterName is string && data.posterName.size() >= 1 && data.posterName.size() <= 60
+        && data.status in ['open', 'returned']
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidTimetableSlot(data, docId) {
+      return data.keys().hasAll([
+          'id', 'userId', 'dayOfWeek', 'startTime', 'endTime', 'subject', 'reminderEnabled', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'userId', 'dayOfWeek', 'startTime', 'endTime', 'subject', 'building', 'room', 'reminderEnabled', 'createdAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.userId is string && isValidId(data.userId)
+        && data.dayOfWeek in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        && data.startTime is string && data.startTime.size() >= 4 && data.startTime.size() <= 16
+        && data.endTime is string && data.endTime.size() >= 4 && data.endTime.size() <= 16
+        && data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 100
+        && (!('building' in data) || (data.building is string && data.building.size() <= 80))
+        && (!('room' in data) || (data.room is string && data.room.size() <= 40))
+        && data.reminderEnabled is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAssignment(data, docId) {
+      return data.keys().hasAll(['id', 'userId', 'kind', 'title', 'dueDate', 'completed', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'kind', 'title', 'course', 'dueDate', 'completed', 'createdAt'])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.userId is string && isValidId(data.userId)
+        && data.kind in ['assignment', 'exam']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && (!('course' in data) || (data.course is string && data.course.size() <= 80))
+        && data.dueDate is string && data.dueDate.size() >= 8 && data.dueDate.size() <= 32
+        && data.completed is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidNotification(data, docId) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'body', 'category', 'read', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'title', 'body', 'category', 'read', 'createdAt'])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.userId is string && isValidId(data.userId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 280
+        && data.category in ['event', 'message', 'academic', 'safety', 'feedback']
+        && data.read is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFeedback(data, docId) {
+      return data.keys().hasAll([
+          'id', 'feedbackType', 'category', 'subject', 'details',
+          'isAnonymous', 'visibility', 'submitterUid', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'feedbackType', 'category', 'subject', 'details', 'building',
+          'isAnonymous', 'visibility', 'submitterUid', 'status', 'adminResponse',
+          'createdAt', 'updatedAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.feedbackType in ['anonymous_feedback', 'facility_complaint', 'suggestion']
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 40
+        && data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 120
+        && data.details is string && data.details.size() >= 5 && data.details.size() <= 800
+        && (!('building' in data) || (data.building is string && data.building.size() <= 80))
+        && data.isAnonymous is bool
+        && data.visibility in ['public', 'private']
+        && data.submitterUid is string && isValidId(data.submitterUid)
+        && data.status in ['submitted', 'in_review', 'resolved']
+        && (!('adminResponse' in data) || (data.adminResponse is string && data.adminResponse.size() <= 500))
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidPoll(data, docId) {
+      return data.keys().hasAll(['id', 'question', 'options', 'voteCounts', 'votedUids', 'createdBy', 'createdAt'])
+        && data.keys().hasOnly(['id', 'question', 'options', 'voteCounts', 'votedUids', 'createdBy', 'createdAt'])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.question is string && data.question.size() >= 5 && data.question.size() <= 160
+        && data.options is list && data.options.size() >= 2 && data.options.size() <= 6
+        && data.options[0] is string && data.options[0].size() <= 80
+        && data.voteCounts is list && data.voteCounts.size() == data.options.size()
+        && data.voteCounts[0] is int && data.voteCounts[0] >= 0
+        && isStringListBounded(data.votedUids, 500, 128)
+        && data.createdBy is string && isValidId(data.createdBy)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSafetyReport(data, docId) {
+      return data.keys().hasAll([
+          'id', 'reportType', 'locationNote', 'description',
+          'severity', 'reporterUid', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'reportType', 'building', 'floor', 'locationNote',
+          'description', 'severity', 'reporterUid', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.id == docId
+        && isValidId(data.id)
+        && data.reportType in ['unsafe_location', 'maintenance']
+        && (!('building' in data) || (data.building is string && data.building.size() <= 80))
+        && (!('floor' in data) || (data.floor is string && data.floor.size() <= 40))
+        && data.locationNote is string && data.locationNote.size() >= 3 && data.locationNote.size() <= 160
+        && data.description is string && data.description.size() >= 5 && data.description.size() <= 600
+        && data.severity in ['low', 'medium', 'high']
+        && data.reporterUid is string && isValidId(data.reporterUid)
+        && data.status in ['open', 'acknowledged', 'resolved']
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    // --- Connection Healthcheck ---
+    match /test/connection {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // --- Role Marker Collections (read-only from client) ---
+    match /admins/{userId} {
+      allow get: if isOwner(userId);
+      allow list, write: if false;
+    }
+
+    match /organizers/{userId} {
+      allow get: if isValidId(userId) && isSignedIn();
+      allow list, write: if false;
+    }
+
+    // --- Core Campus Map & Live Status Collections (Preserved) ---
+    match /facilities/{facilityId} {
+      allow get: if isValidId(facilityId);
+      allow list: if resource.data.id is string && request.query.limit <= 300;
+      allow create: if isTrustedWriter()
+        && isValidId(facilityId)
+        && isValidCampusFacility(incoming(), facilityId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && (!('updatedAt' in incoming()) || incoming().updatedAt == request.time);
+      allow update: if isTrustedWriter()
+        && isValidId(facilityId)
+        && isValidCampusFacility(incoming(), facilityId)
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'lat', 'lon', 'verified', 'isApproximateLocation', 'updatedAt'
+        ]);
+      allow delete: if isAdmin();
+    }
+
+    match /pinOverrides/{facilityId} {
+      allow get: if isValidId(facilityId);
+      allow list: if resource.data.facilityId is string && request.query.limit <= 300;
+      allow create: if isTrustedWriter()
+        && isValidId(facilityId)
+        && isValidPinOverride(incoming(), facilityId)
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time;
+      allow update: if isTrustedWriter()
+        && isValidId(facilityId)
+        && isValidPinOverride(incoming(), facilityId)
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'lat', 'lon', 'verified', 'isApproximateLocation', 'updatedBy', 'updatedAt'
+        ]);
+      allow delete: if isAdmin();
+    }
+
+    match /statusReports/{reportId} {
+      allow get: if isValidId(reportId);
+      allow list: if resource.data.facilityId is string && request.query.limit <= 500;
+      allow create: if isTrustedWriter()
+        && isValidId(reportId)
+        && isValidStatusReport(incoming(), reportId)
+        && incoming().reporterId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().confirmations == 0
+        && incoming().confirmedBy.size() == 0;
+      allow update: if isTrustedWriter()
+        && isValidId(reportId)
+        && isValidStatusReport(incoming(), reportId)
+        && incoming().reporterId == existing().reporterId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['confirmations', 'confirmedBy'])
+        && incoming().confirmations == existing().confirmations + 1
+        && !(request.auth.uid in existing().confirmedBy)
+        && incoming().confirmedBy.hasAll(existing().confirmedBy)
+        && incoming().confirmedBy.size() == existing().confirmations + 1
+        && request.auth.uid in incoming().confirmedBy;
+      allow delete: if isAdmin();
+    }
+
+    // --- Profiles & Owner-Private Account Settings (PII-isolated) ---
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || resource.data.visibility == 'campus' || isAdmin());
+      allow list: if resource.data.visibility == 'campus' && request.query.limit <= 150;
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidPublicProfile(incoming(), userId)
+        && incoming().isVerifiedOrganizer == false
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidPublicProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() || (
+            isOwner(userId)
+            && incoming().isVerifiedOrganizer == existing().isVerifiedOrganizer
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'department', 'course', 'year', 'section',
+              'bio', 'interests', 'photoDataUrl', 'visibility', 'allowDirectMessages', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /user_private/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid && request.query.limit <= 5;
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidPrivateSettings(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidPrivateSettings(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'savedEventIds', 'blockedUids', 'dashboardWidgets',
+          'notifyEvents', 'notifyClasses', 'notifyMessages', 'notifySafety', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // --- Events & Clubs ---
+    match /events/{eventId} {
+      allow get: if isValidId(eventId);
+      allow list: if resource.data.id is string && request.query.limit <= 200;
+      allow create: if isTrustedWriter()
+        && isValidId(eventId)
+        && isValidEvent(incoming(), eventId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().registrationCount == 0
+        && incoming().registeredUids.size() == 0
+        && (!incoming().isOfficial || isVerifiedOrganizerOrAdmin());
+      allow update: if isTrustedWriter()
+        && isValidId(eventId)
+        && isValidEvent(incoming(), eventId)
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isAdmin() || (incoming().createdBy == request.auth.uid && incoming().isOfficial == existing().isOfficial))
+            && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'locationName', 'startIso', 'endIso', 'description', 'updatedAt'])
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['registeredUids', 'registrationCount', 'updatedAt'])
+            && incoming().registeredUids.size() == incoming().registrationCount
+            && (
+              (!(request.auth.uid in existing().registeredUids)
+                && request.auth.uid in incoming().registeredUids
+                && incoming().registeredUids.hasAll(existing().registeredUids)
+                && incoming().registrationCount == existing().registrationCount + 1)
+              || (request.auth.uid in existing().registeredUids
+                && !(request.auth.uid in incoming().registeredUids)
+                && existing().registeredUids.hasAll(incoming().registeredUids)
+                && incoming().registrationCount == existing().registrationCount - 1)
+            )
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /clubs/{clubId} {
+      allow get: if isValidId(clubId);
+      allow list: if resource.data.id is string && request.query.limit <= 150;
+      allow create: if isTrustedWriter()
+        && isValidId(clubId)
+        && isValidClub(incoming(), clubId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if isTrustedWriter()
+        && isValidId(clubId)
+        && isValidClub(incoming(), clubId)
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids'])
+        && (
+          (!(request.auth.uid in existing().memberUids) && request.auth.uid in incoming().memberUids && incoming().memberUids.hasAll(existing().memberUids) && incoming().memberUids.size() == existing().memberUids.size() + 1)
+          || (request.auth.uid in existing().memberUids && !(request.auth.uid in incoming().memberUids) && existing().memberUids.hasAll(incoming().memberUids) && incoming().memberUids.size() == existing().memberUids.size() - 1)
+        );
+      allow delete: if isAdmin();
+    }
+
+    // --- Student Community: Posts, Comments, DMs, Study Groups ---
+    match /posts/{postId} {
+      allow get: if isValidId(postId) && (resource.data.isHidden == false || isAdmin() || isOwner(resource.data.authorUid));
+      allow list: if resource.data.isHidden == false && request.query.limit <= 200;
+      allow create: if isTrustedWriter()
+        && isValidId(postId)
+        && isValidPost(incoming(), postId)
+        && incoming().authorUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().likesCount == 0
+        && incoming().likedBy.size() == 0
+        && incoming().commentsCount == 0
+        && incoming().reportedBy.size() == 0
+        && incoming().isHidden == false;
+      allow update: if isTrustedWriter()
+        && isValidId(postId)
+        && isValidPost(incoming(), postId)
+        && incoming().authorUid == existing().authorUid
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin()
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['likedBy', 'likesCount'])
+            && incoming().likedBy.size() == incoming().likesCount
+            && (
+              (!(request.auth.uid in existing().likedBy) && request.auth.uid in incoming().likedBy && incoming().likedBy.hasAll(existing().likedBy) && incoming().likesCount == existing().likesCount + 1)
+              || (request.auth.uid in existing().likedBy && !(request.auth.uid in incoming().likedBy) && existing().likedBy.hasAll(incoming().likedBy) && incoming().likesCount == existing().likesCount - 1)
+            )
+          )
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['reportedBy', 'isHidden'])
+            && !(request.auth.uid in existing().reportedBy)
+            && request.auth.uid in incoming().reportedBy
+            && incoming().reportedBy.hasAll(existing().reportedBy)
+            && incoming().reportedBy.size() == existing().reportedBy.size() + 1
+            && (incoming().isHidden == existing().isHidden || incoming().reportedBy.size() >= 5)
+          )
+        );
+      allow delete: if isAdmin() || isOwner(existing().authorUid);
+    }
+
+    match /comments/{commentId} {
+      allow get: if isValidId(commentId);
+      allow list: if resource.data.postId is string && request.query.limit <= 300;
+      allow create: if isTrustedWriter()
+        && isValidId(commentId)
+        && isValidComment(incoming(), commentId)
+        && incoming().authorUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/posts/$(incoming().postId));
+      allow update: if false;
+      allow delete: if isAdmin() || isOwner(existing().authorUid);
+    }
+
+    match /messages/{messageId} {
+      allow get: if isValidId(messageId) && isSignedIn() && request.auth.uid in resource.data.participants;
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants && request.query.limit <= 200;
+      allow create: if isTrustedWriter()
+        && isValidId(messageId)
+        && isValidDirectMessage(incoming(), messageId)
+        && incoming().senderId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /groups/{groupId} {
+      allow get: if isValidId(groupId);
+      allow list: if resource.data.id is string && request.query.limit <= 150;
+      allow create: if isTrustedWriter()
+        && isValidId(groupId)
+        && isValidStudyGroup(incoming(), groupId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && request.auth.uid in incoming().memberUids;
+      allow update: if isTrustedWriter()
+        && isValidId(groupId)
+        && isValidStudyGroup(incoming(), groupId)
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids'])
+        && (
+          (!(request.auth.uid in existing().memberUids) && request.auth.uid in incoming().memberUids && incoming().memberUids.hasAll(existing().memberUids) && incoming().memberUids.size() == existing().memberUids.size() + 1)
+          || (request.auth.uid in existing().memberUids && !(request.auth.uid in incoming().memberUids) && existing().memberUids.hasAll(incoming().memberUids) && incoming().memberUids.size() == existing().memberUids.size() - 1)
+        );
+      allow delete: if isAdmin() || isOwner(existing().createdBy);
+    }
+
+    // --- Marketplace & Lost & Found ---
+    match /marketplace_listings/{listingId} {
+      allow get: if isValidId(listingId) && (resource.data.status != 'removed' || isOwner(resource.data.sellerUid) || isAdmin());
+      allow list: if resource.data.status in ['available', 'sold'] && request.query.limit <= 200;
+      allow create: if isTrustedWriter()
+        && isValidId(listingId)
+        && isValidMarketplaceListing(incoming(), listingId)
+        && incoming().sellerUid == request.auth.uid
+        && incoming().status == 'available'
+        && incoming().reportedBy.size() == 0
+        && incoming().createdAt == request.time;
+      allow update: if isTrustedWriter()
+        && isValidId(listingId)
+        && isValidMarketplaceListing(incoming(), listingId)
+        && incoming().sellerUid == existing().sellerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && existing().status != 'removed'
+        && (
+          isAdmin()
+          || (
+            isOwner(existing().sellerUid)
+            && existing().status == 'available'
+            && incoming().status in ['sold', 'removed']
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['reportedBy', 'status', 'updatedAt'])
+            && !(request.auth.uid in existing().reportedBy)
+            && request.auth.uid in incoming().reportedBy
+            && incoming().reportedBy.hasAll(existing().reportedBy)
+            && incoming().reportedBy.size() == existing().reportedBy.size() + 1
+            && (incoming().status == existing().status || incoming().reportedBy.size() >= 5)
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /lost_found/{itemId} {
+      allow get: if isValidId(itemId);
+      allow list: if resource.data.id is string && request.query.limit <= 200;
+      allow create: if isTrustedWriter()
+        && isValidId(itemId)
+        && isValidLostFound(incoming(), itemId)
+        && incoming().posterUid == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time;
+      allow update: if isTrustedWriter()
+        && isValidId(itemId)
+        && isValidLostFound(incoming(), itemId)
+        && incoming().posterUid == existing().posterUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isOwner(existing().posterUid)
+            && existing().status == 'open'
+            && incoming().status == 'returned'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    // --- Owner-Private Academic Hub & Notifications ---
+    match /timetables/{slotId} {
+      allow get: if isValidId(slotId) && isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid && request.query.limit <= 150;
+      allow create: if isTrustedWriter()
+        && isValidId(slotId)
+        && isValidTimetableSlot(incoming(), slotId)
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if isTrustedWriter()
+        && isValidId(slotId)
+        && isValidTimetableSlot(incoming(), slotId)
+        && incoming().userId == existing().userId
+        && existing().userId == request.auth.uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['reminderEnabled', 'room', 'building']);
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    match /assignments/{assignmentId} {
+      allow get: if isValidId(assignmentId) && isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid && request.query.limit <= 150;
+      allow create: if isTrustedWriter()
+        && isValidId(assignmentId)
+        && isValidAssignment(incoming(), assignmentId)
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if isTrustedWriter()
+        && isValidId(assignmentId)
+        && isValidAssignment(incoming(), assignmentId)
+        && incoming().userId == existing().userId
+        && existing().userId == request.auth.uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['completed']);
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid && request.query.limit <= 100;
+      allow create: if isTrustedWriter()
+        && isValidId(notificationId)
+        && isValidNotification(incoming(), notificationId)
+        && incoming().createdAt == request.time
+        && incoming().read == false;
+      allow update: if isTrustedWriter()
+        && isValidId(notificationId)
+        && isValidNotification(incoming(), notificationId)
+        && incoming().userId == existing().userId
+        && existing().userId == request.auth.uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // --- Campus Feedback, Polls & Safety Reports ---
+    match /feedback/{feedbackId} {
+      allow get: if isValidId(feedbackId) && (
+        resource.data.visibility == 'public'
+        || isAdmin()
+        || (isSignedIn() && resource.data.submitterUid == request.auth.uid)
+      );
+      allow list: if (
+        resource.data.visibility == 'public'
+        || isAdmin()
+        || (isSignedIn() && resource.data.submitterUid == request.auth.uid)
+      ) && request.query.limit <= 200;
+      allow create: if isTrustedWriter()
+        && isValidId(feedbackId)
+        && isValidFeedback(incoming(), feedbackId)
+        && incoming().submitterUid == request.auth.uid
+        && incoming().status == 'submitted'
+        && incoming().createdAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(feedbackId)
+        && isValidFeedback(incoming(), feedbackId)
+        && incoming().submitterUid == existing().submitterUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminResponse', 'updatedAt']);
+      allow delete: if isAdmin();
+    }
+
+    match /polls/{pollId} {
+      allow get: if isValidId(pollId);
+      allow list: if resource.data.id is string && request.query.limit <= 50;
+      allow create: if isTrustedWriter()
+        && isValidId(pollId)
+        && isValidPoll(incoming(), pollId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().votedUids.size() == 0
+        && incoming().createdAt == request.time;
+      allow update: if isTrustedWriter()
+        && isValidId(pollId)
+        && isValidPoll(incoming(), pollId)
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().options == existing().options
+        && !(request.auth.uid in existing().votedUids)
+        && request.auth.uid in incoming().votedUids
+        && incoming().votedUids.hasAll(existing().votedUids)
+        && incoming().votedUids.size() == existing().votedUids.size() + 1
+        && incoming().diff(existing()).affectedKeys().hasOnly(['voteCounts', 'votedUids']);
+      allow delete: if isAdmin();
+    }
+
+    match /safety_reports/{reportId} {
+      allow get: if isValidId(reportId) && (isAdmin() || (isSignedIn() && resource.data.reporterUid == request.auth.uid));
+      allow list: if (isAdmin() || (isSignedIn() && resource.data.reporterUid == request.auth.uid)) && request.query.limit <= 150;
+      allow create: if isTrustedWriter()
+        && isValidId(reportId)
+        && isValidSafetyReport(incoming(), reportId)
+        && incoming().reporterUid == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(reportId)
+        && isValidSafetyReport(incoming(), reportId)
+        && incoming().reporterUid == existing().reporterUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isAdmin();
+    }
+  }
+}
